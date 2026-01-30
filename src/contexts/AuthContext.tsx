@@ -65,12 +65,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Store state for verification
       localStorage.setItem("oauth_state", data.params.state);
 
-      // Build authorization URL
+      // Build authorization URL with new format
       const params = new URLSearchParams({
-        clientId: data.params.clientId,
-        redirectUri: data.params.redirectUri,
+        client_id: data.params.client_id,
+        redirect_uri: data.params.redirect_uri,
+        response_type: data.params.response_type,
         state: data.params.state,
-        scope: data.params.scope.join(","),
       });
 
       // Redirect to SecondMe authorization page

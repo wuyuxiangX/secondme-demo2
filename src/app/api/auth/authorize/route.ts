@@ -7,14 +7,12 @@ export async function POST() {
     const state = uuidv4();
     createOAuthState(state);
 
-    const scopes = process.env.SCOPES?.split(',') || [];
-
     return NextResponse.json({
-      authorizeUrl: process.env.OAUTH_AUTHORIZE_URL,
+      authorizeUrl: 'https://go.second.me/oauth/',
       params: {
-        clientId: process.env.CLIENT_ID,
-        redirectUri: process.env.REDIRECT_URI,
-        scope: scopes,
+        client_id: process.env.CLIENT_ID,
+        redirect_uri: process.env.REDIRECT_URI,
+        response_type: 'code',
         state: state
       }
     });

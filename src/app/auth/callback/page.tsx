@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -10,8 +10,15 @@ function CallbackContent() {
   const { handleCallback } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(true);
+  // 防止 React 严格模式下 useEffect 执行两次导致授权码被重复使用
+  const processedRef = useRef(false);
 
   useEffect(() => {
+    // 如果已经处理过，直接返回
+    if (processedRef.current) {
+      return;
+    }
+
     const processCallback = async () => {
       const code = searchParams.get("code");
       const state = searchParams.get("state");
@@ -28,6 +35,9 @@ function CallbackContent() {
         setProcessing(false);
         return;
       }
+
+      // 标记为已处理，防止重复执行
+      processedRef.current = true;
 
       try {
         await handleCallback(code, state);

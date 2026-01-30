@@ -1,3 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=Bangers&family=Comic+Neue:wght@400;700&display=swap');
+
+:root {
+  /* Comic Book Color Palette */
+  --comic-yellow: #FFE135;
+  --comic-red: #E53935;
+  --comic-blue: #1E88E5;
+  --comic-cyan: #00BCD4;
+  --comic-pink: #FF6B9D;
+  --comic-orange: #FF9800;
+  --comic-green: #4CAF50;
+  --comic-purple: #9C27B0;
+  --comic-black: #1a1a1a;
+  --comic-white: #FFFEF0;
+
+  /* Ink and Paper */
+  --ink: #1a1a1a;
+  --paper: #FFFEF0;
+  --paper-shadow: #F5F5DC;
+
+  /* Border thickness */
+  --border-thick: 4px;
+  --border-medium: 3px;
+  --border-thin: 2px;
+}
+
 * {
   box-sizing: border-box;
   padding: 0;
@@ -8,12 +34,56 @@ html,
 body {
   max-width: 100vw;
   overflow-x: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: 'Comic Neue', cursive, sans-serif;
 }
 
 body {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--comic-yellow);
   min-height: 100vh;
+  position: relative;
+}
+
+/* Halftone dot pattern overlay */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image:
+    radial-gradient(circle, var(--ink) 1px, transparent 1px);
+  background-size: 8px 8px;
+  opacity: 0.03;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Action lines background effect */
+body::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 100px,
+      rgba(255, 255, 255, 0.03) 100px,
+      rgba(255, 255, 255, 0.03) 102px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 100px,
+      rgba(255, 255, 255, 0.03) 100px,
+      rgba(255, 255, 255, 0.03) 102px
+    );
+  pointer-events: none;
+  z-index: 0;
 }
 
 a {
@@ -21,60 +91,363 @@ a {
   text-decoration: none;
 }
 
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px;
-}
-
+/* ===== COMIC PANEL CARD ===== */
 .card {
-  background: white;
-  border-radius: 16px;
+  background: var(--paper);
+  border: var(--border-thick) solid var(--ink);
+  border-radius: 0;
   padding: 32px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  box-shadow:
+    8px 8px 0 var(--ink),
+    12px 12px 0 var(--comic-red);
+  position: relative;
+  z-index: 1;
+  transform: rotate(-1deg);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+.card:hover {
+  transform: rotate(0deg) scale(1.02);
+}
+
+/* Panel corner decoration */
+.card::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  right: -8px;
+  bottom: -8px;
+  border: var(--border-thin) dashed var(--ink);
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* ===== COMIC BUTTONS ===== */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 12px 24px;
-  border: none;
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: 600;
+  padding: 16px 28px;
+  border: var(--border-thick) solid var(--ink);
+  border-radius: 0;
+  font-size: 18px;
+  font-weight: 700;
+  font-family: 'Bangers', cursive;
+  letter-spacing: 1px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
+  position: relative;
+  text-transform: uppercase;
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.btn:active {
+  transform: translate(4px, 4px);
+  box-shadow: 0 0 0 var(--ink);
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: var(--comic-red);
+  color: var(--comic-white);
 }
 
 .btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  background: var(--comic-orange);
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 var(--ink);
+}
+
+/* Action effect on hover */
+.btn-primary::after {
+  content: '开始!';
+  position: absolute;
+  top: -20px;
+  right: -30px;
+  background: var(--comic-yellow);
+  border: var(--border-medium) solid var(--ink);
+  padding: 4px 8px;
+  font-size: 12px;
+  font-family: 'Bangers', cursive;
+  transform: rotate(15deg);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.btn-primary:hover::after {
+  opacity: 1;
 }
 
 .btn-secondary {
-  background: #f5f5f5;
-  color: #333;
+  background: var(--paper);
+  color: var(--ink);
 }
 
 .btn-secondary:hover {
-  background: #e5e5e5;
+  background: var(--comic-cyan);
 }
 
 .btn-danger {
-  background: #ff4757;
-  color: white;
+  background: var(--ink);
+  color: var(--comic-white);
 }
 
 .btn-danger:hover {
-  background: #ff3344;
+  background: var(--comic-purple);
 }
 
+/* ===== TYPOGRAPHY ===== */
+h1, h2, h3 {
+  font-family: 'Bangers', cursive;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+/* Comic title with outline effect */
+.comic-title {
+  font-size: 48px;
+  text-align: center;
+  color: var(--comic-red);
+  text-shadow:
+    3px 3px 0 var(--ink),
+    -1px -1px 0 var(--ink),
+    1px -1px 0 var(--ink),
+    -1px 1px 0 var(--ink),
+    1px 1px 0 var(--ink);
+  transform: rotate(-2deg);
+  margin-bottom: 8px;
+}
+
+/* ===== SPEECH BUBBLE STYLES ===== */
+.speech-bubble {
+  background: var(--paper);
+  border: var(--border-medium) solid var(--ink);
+  border-radius: 20px;
+  padding: 16px 20px;
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.speech-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -15px;
+  left: 30px;
+  width: 0;
+  height: 0;
+  border-left: 15px solid transparent;
+  border-right: 15px solid transparent;
+  border-top: 15px solid var(--ink);
+}
+
+.speech-bubble::before {
+  content: '';
+  position: absolute;
+  bottom: -10px;
+  left: 33px;
+  width: 0;
+  height: 0;
+  border-left: 12px solid transparent;
+  border-right: 12px solid transparent;
+  border-top: 12px solid var(--paper);
+  z-index: 1;
+}
+
+/* Thought bubble variation */
+.thought-bubble {
+  background: var(--paper);
+  border: var(--border-medium) solid var(--ink);
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  padding: 20px 24px;
+  position: relative;
+}
+
+.thought-bubble::after,
+.thought-bubble::before {
+  content: '';
+  position: absolute;
+  background: var(--paper);
+  border: var(--border-thin) solid var(--ink);
+  border-radius: 50%;
+}
+
+.thought-bubble::after {
+  width: 20px;
+  height: 20px;
+  bottom: -25px;
+  left: 30px;
+}
+
+.thought-bubble::before {
+  width: 12px;
+  height: 12px;
+  bottom: -40px;
+  left: 25px;
+}
+
+/* ===== USER INFO ===== */
+.user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.user-avatar {
+  width: 100px;
+  height: 100px;
+  border: var(--border-thick) solid var(--ink);
+  border-radius: 50%;
+  background: var(--comic-cyan);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+  font-size: 48px;
+  font-weight: bold;
+  font-family: 'Bangers', cursive;
+  margin: 0 auto;
+  box-shadow: 4px 4px 0 var(--ink);
+  position: relative;
+  animation: avatar-bounce 2s ease-in-out infinite;
+}
+
+@keyframes avatar-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+/* Star burst behind avatar */
+.user-avatar::before {
+  content: '★';
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  font-size: 24px;
+  color: var(--comic-yellow);
+  text-shadow: 1px 1px 0 var(--ink);
+  animation: star-spin 3s linear infinite;
+}
+
+@keyframes star-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.user-name {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--ink);
+  font-family: 'Bangers', cursive;
+  letter-spacing: 2px;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.user-detail {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border: var(--border-thin) solid var(--ink);
+  background: var(--paper-shadow);
+  margin-bottom: 8px;
+}
+
+.user-detail:last-child {
+  margin-bottom: 0;
+}
+
+.user-detail-label {
+  color: var(--ink);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+
+.user-detail-value {
+  color: var(--ink);
+  font-weight: 400;
+}
+
+/* ===== LOADING ANIMATION ===== */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.spinner {
+  width: 60px;
+  height: 60px;
+  border: var(--border-thick) solid var(--paper-shadow);
+  border-top: var(--border-thick) solid var(--comic-red);
+  border-right: var(--border-thick) solid var(--comic-blue);
+  border-bottom: var(--border-thick) solid var(--comic-yellow);
+  border-left: var(--border-thick) solid var(--comic-green);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.loading::after {
+  content: '加载中...';
+  font-family: 'Bangers', cursive;
+  font-size: 18px;
+  letter-spacing: 2px;
+  color: var(--ink);
+  animation: blink 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ===== STATUS MESSAGES ===== */
+.error {
+  background: var(--comic-red);
+  border: var(--border-medium) solid var(--ink);
+  padding: 16px;
+  color: var(--comic-white);
+  margin-bottom: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  position: relative;
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.error::before {
+  content: '✗ ';
+}
+
+.success {
+  background: var(--comic-green);
+  border: var(--border-medium) solid var(--ink);
+  padding: 16px;
+  color: var(--comic-white);
+  margin-bottom: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  position: relative;
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+.success::before {
+  content: '✓ ';
+}
+
+/* ===== UTILITY CLASSES ===== */
 .text-center {
   text-align: center;
 }
@@ -88,91 +461,6 @@ a {
 }
 
 .mb-4 {
-  margin-bottom: 16px;
-}
-
-.user-info {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.user-avatar {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 32px;
-  font-weight: bold;
-  margin: 0 auto;
-}
-
-.user-name {
-  font-size: 24px;
-  font-weight: 600;
-  color: #333;
-}
-
-.user-detail {
-  display: flex;
-  justify-content: space-between;
-  padding: 12px 0;
-  border-bottom: 1px solid #eee;
-}
-
-.user-detail:last-child {
-  border-bottom: none;
-}
-
-.user-detail-label {
-  color: #666;
-}
-
-.user-detail-value {
-  color: #333;
-  font-weight: 500;
-}
-
-.loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
-}
-
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #667eea;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.error {
-  background: #fff5f5;
-  border: 1px solid #ff4757;
-  border-radius: 8px;
-  padding: 16px;
-  color: #ff4757;
-  margin-bottom: 16px;
-}
-
-.success {
-  background: #f0fff4;
-  border: 1px solid #2ed573;
-  border-radius: 8px;
-  padding: 16px;
-  color: #2ed573;
   margin-bottom: 16px;
 }
 
@@ -198,4 +486,100 @@ a {
 
 .min-h-screen {
   min-height: 100vh;
+}
+
+/* ===== COMIC TAG/BADGE ===== */
+.comic-tag {
+  display: inline-block;
+  background: var(--comic-pink);
+  border: var(--border-thin) solid var(--ink);
+  padding: 6px 14px;
+  font-family: 'Bangers', cursive;
+  font-size: 14px;
+  letter-spacing: 1px;
+  box-shadow: 2px 2px 0 var(--ink);
+  transform: rotate(-3deg);
+  transition: transform 0.2s ease;
+}
+
+.comic-tag:hover {
+  transform: rotate(3deg) scale(1.1);
+}
+
+/* Different tag colors */
+.comic-tag:nth-child(odd) {
+  background: var(--comic-cyan);
+}
+
+.comic-tag:nth-child(3n) {
+  background: var(--comic-orange);
+}
+
+.comic-tag:nth-child(4n) {
+  background: var(--comic-purple);
+  color: var(--comic-white);
+}
+
+/* ===== ACTION BURST EFFECT ===== */
+.action-burst {
+  position: relative;
+  display: inline-block;
+}
+
+.action-burst::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 120%;
+  height: 120%;
+  background: var(--comic-yellow);
+  clip-path: polygon(
+    50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%,
+    50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%
+  );
+  transform: translate(-50%, -50%);
+  z-index: -1;
+  animation: burst-pulse 2s ease-in-out infinite;
+}
+
+@keyframes burst-pulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+  50% { transform: translate(-50%, -50%) scale(1.1) rotate(5deg); }
+}
+
+/* ===== COMIC PANEL DECORATION ===== */
+.panel-decoration {
+  position: absolute;
+  font-family: 'Bangers', cursive;
+  font-size: 14px;
+  color: var(--ink);
+  opacity: 0.5;
+}
+
+.panel-decoration.top-left {
+  top: 8px;
+  left: 12px;
+}
+
+.panel-decoration.bottom-right {
+  bottom: 8px;
+  right: 12px;
+}
+
+/* ===== SUBTITLE STYLE ===== */
+.subtitle {
+  font-family: 'Comic Neue', cursive;
+  font-size: 16px;
+  color: var(--ink);
+  text-align: center;
+  opacity: 0.8;
+  position: relative;
+  padding: 8px 0;
+}
+
+.subtitle::before,
+.subtitle::after {
+  content: '~';
+  margin: 0 8px;
 }
