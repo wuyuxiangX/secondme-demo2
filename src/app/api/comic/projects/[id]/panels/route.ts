@@ -11,14 +11,14 @@ export async function GET(
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   }
 
-  const user = getUserById(userId);
+  const user = await getUserById(userId);
   if (!user) {
     return NextResponse.json({ error: 'User not found' }, { status: 401 });
   }
 
   try {
     const { id } = await params;
-    const project = getComicProject(id);
+    const project = await getComicProject(id);
 
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
@@ -28,7 +28,7 @@ export async function GET(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    const panels = getPanels(id);
+    const panels = await getPanels(id);
     return NextResponse.json({ panels });
   } catch (error) {
     console.error('Failed to get panels:', error);

@@ -1,47 +1,129 @@
-import Database from 'better-sqlite3';
-import path from 'path';
+import { Pool, PoolClient } from 'pg';
 
-const dbPath = path.join(process.cwd(), 'data', 'database.sqlite');
+// Connection pool with lazy initialization
+let pool: Pool | null = null;
 
-let db: Database.Database | null = null;
-
-export function getDb(): Database.Database {
-  if (!db) {
-    db = new Database(dbPath);
-    db.pragma('journal_mode = WAL');
+function getPool(): Pool {
+  if (!pool) {
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : false,
+      max: 10,
+    });
   }
-  return db;
+  return pool;
 }
 
-export function initDatabase(): void {
-  const database = getDb();
+// Initialize database tables
+let initialized = false;
 
-  // Create users table
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      secondme_user_id TEXT UNIQUE,
-      access_token TEXT,
-      refresh_token TEXT,
-      token_expires_at INTEGER,
-      user_info TEXT,
-      created_at INTEGER DEFAULT (strftime('%s', 'now')),
-      updated_at INTEGER DEFAULT (strftime('%s', 'now'))
-    )
-  `);
+export async function initDatabase(): Promise<void> {
+  if (initialized) return;
 
-  // Create sessions table for OAuth state management
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS oauth_states (
-      state TEXT PRIMARY KEY,
-      created_at INTEGER DEFAULT (strftime('%s', 'now')),
-      expires_at INTEGER
-    )
-  `);
+  const client = await getPool().connect();
+  try {
+    // Create users table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        secondme_user_id TEXT UNIQUE,
+        access_token TEXT,
+        refresh_token TEXT,
+        token_expires_at BIGINT,
+        user_info TEXT,
+        created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+        updated_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT
+      )
+    `);
+
+    // Create sessions table for OAuth state management
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS oauth_states (
+        state TEXT PRIMARY KEY,
+        created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+        expires_at BIGINT
+      )
+    `);
+
+    // Comic projects table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS comic_projects (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        status TEXT DEFAULT 'draft',
+        style TEXT DEFAULT 'chinese',
+        character_desc TEXT,
+        life_summary TEXT,
+        chat_session_id TEXT,
+        created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+        updated_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )
+    `);
+
+    // Add chat_session_id column if it doesn't exist (migration for existing tables)
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'comic_projects' AND column_name = 'chat_session_id'
+        ) THEN
+          ALTER TABLE comic_projects ADD COLUMN chat_session_id TEXT;
+        END IF;
+      END $$;
+    `);
+
+    // Comic conversations table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS comic_conversations (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+        FOREIGN KEY (project_id) REFERENCES comic_projects(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Comic panels table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS comic_panels (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        panel_order INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        scene_desc TEXT NOT NULL,
+        prompt TEXT,
+        image_base64 TEXT,
+        status TEXT DEFAULT 'pending',
+        created_at BIGINT DEFAULT EXTRACT(EPOCH FROM NOW())::BIGINT,
+        FOREIGN KEY (project_id) REFERENCES comic_projects(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Create indexes
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_comic_projects_user_id ON comic_projects(user_id)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_comic_conversations_project_id ON comic_conversations(project_id)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_comic_panels_project_id ON comic_panels(project_id)
+    `);
+
+    initialized = true;
+  } finally {
+    client.release();
+  }
 }
 
-// Initialize database on module load
-initDatabase();
+// Ensure database is initialized before any operation
+async function ensureInit(): Promise<void> {
+  await initDatabase();
+}
 
 export interface User {
   id: string;
@@ -55,85 +137,95 @@ export interface User {
 }
 
 // User operations
-export function createOrUpdateUser(
+export async function createOrUpdateUser(
   secondmeUserId: string,
   accessToken: string,
   refreshToken: string,
   expiresIn: number,
   userInfo: Record<string, unknown>
-): User | undefined {
-  const database = getDb();
+): Promise<User | undefined> {
+  await ensureInit();
   const expiresAt = Math.floor(Date.now() / 1000) + expiresIn;
-
-  const stmt = database.prepare(`
-    INSERT INTO users (id, secondme_user_id, access_token, refresh_token, token_expires_at, user_info, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, strftime('%s', 'now'))
-    ON CONFLICT(secondme_user_id) DO UPDATE SET
-      access_token = excluded.access_token,
-      refresh_token = excluded.refresh_token,
-      token_expires_at = excluded.token_expires_at,
-      user_info = excluded.user_info,
-      updated_at = strftime('%s', 'now')
-  `);
-
   const userId = secondmeUserId;
-  stmt.run(userId, secondmeUserId, accessToken, refreshToken, expiresAt, JSON.stringify(userInfo));
+
+  await getPool().query(
+    `
+    INSERT INTO users (id, secondme_user_id, access_token, refresh_token, token_expires_at, user_info, updated_at)
+    VALUES ($1, $2, $3, $4, $5, $6, EXTRACT(EPOCH FROM NOW())::BIGINT)
+    ON CONFLICT(secondme_user_id) DO UPDATE SET
+      access_token = EXCLUDED.access_token,
+      refresh_token = EXCLUDED.refresh_token,
+      token_expires_at = EXCLUDED.token_expires_at,
+      user_info = EXCLUDED.user_info,
+      updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT
+    `,
+    [userId, secondmeUserId, accessToken, refreshToken, expiresAt, JSON.stringify(userInfo)]
+  );
 
   return getUserBySecondmeId(secondmeUserId);
 }
 
-export function getUserBySecondmeId(secondmeUserId: string): User | undefined {
-  const database = getDb();
-  return database.prepare('SELECT * FROM users WHERE secondme_user_id = ?').get(secondmeUserId) as User | undefined;
+export async function getUserBySecondmeId(secondmeUserId: string): Promise<User | undefined> {
+  await ensureInit();
+  const result = await getPool().query('SELECT * FROM users WHERE secondme_user_id = $1', [secondmeUserId]);
+  return result.rows[0] as User | undefined;
 }
 
-export function getUserById(id: string): User | undefined {
-  const database = getDb();
-  return database.prepare('SELECT * FROM users WHERE id = ?').get(id) as User | undefined;
+export async function getUserById(id: string): Promise<User | undefined> {
+  await ensureInit();
+  const result = await getPool().query('SELECT * FROM users WHERE id = $1', [id]);
+  return result.rows[0] as User | undefined;
 }
 
-export function updateUserTokens(
+export async function updateUserTokens(
   userId: string,
   accessToken: string,
   refreshToken: string,
   expiresIn: number
-): void {
-  const database = getDb();
+): Promise<void> {
+  await ensureInit();
   const expiresAt = Math.floor(Date.now() / 1000) + expiresIn;
 
-  database.prepare(`
+  await getPool().query(
+    `
     UPDATE users SET
-      access_token = ?,
-      refresh_token = ?,
-      token_expires_at = ?,
-      updated_at = strftime('%s', 'now')
-    WHERE id = ?
-  `).run(accessToken, refreshToken, expiresAt, userId);
+      access_token = $1,
+      refresh_token = $2,
+      token_expires_at = $3,
+      updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT
+    WHERE id = $4
+    `,
+    [accessToken, refreshToken, expiresAt, userId]
+  );
 }
 
 // OAuth state operations
-export function createOAuthState(state: string): void {
-  const database = getDb();
+export async function createOAuthState(state: string): Promise<void> {
+  await ensureInit();
   const expiresAt = Math.floor(Date.now() / 1000) + 600; // 10 minutes
-  database.prepare('INSERT INTO oauth_states (state, expires_at) VALUES (?, ?)').run(state, expiresAt);
+  await getPool().query('INSERT INTO oauth_states (state, expires_at) VALUES ($1, $2)', [state, expiresAt]);
 }
 
-export function validateAndDeleteOAuthState(state: string): boolean {
-  const database = getDb();
+export async function validateAndDeleteOAuthState(state: string): Promise<boolean> {
+  await ensureInit();
   const now = Math.floor(Date.now() / 1000);
 
-  const row = database.prepare('SELECT * FROM oauth_states WHERE state = ? AND expires_at > ?').get(state, now);
-  if (row) {
-    database.prepare('DELETE FROM oauth_states WHERE state = ?').run(state);
+  const result = await getPool().query(
+    'SELECT * FROM oauth_states WHERE state = $1 AND expires_at > $2',
+    [state, now]
+  );
+
+  if (result.rows.length > 0) {
+    await getPool().query('DELETE FROM oauth_states WHERE state = $1', [state]);
     return true;
   }
   return false;
 }
 
-export function cleanupExpiredStates(): void {
-  const database = getDb();
+export async function cleanupExpiredStates(): Promise<void> {
+  await ensureInit();
   const now = Math.floor(Date.now() / 1000);
-  database.prepare('DELETE FROM oauth_states WHERE expires_at < ?').run(now);
+  await getPool().query('DELETE FROM oauth_states WHERE expires_at < $1', [now]);
 }
 
 // ============================================
@@ -151,6 +243,7 @@ export interface ComicProject {
   style: string;
   character_desc: string | null;
   life_summary: string | null;
+  chat_session_id: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -175,225 +268,201 @@ export interface ComicPanel {
   created_at: number;
 }
 
-// Initialize comic tables
-export function initComicTables(): void {
-  const database = getDb();
-
-  // Comic projects table
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS comic_projects (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      title TEXT NOT NULL,
-      status TEXT DEFAULT 'draft',
-      style TEXT DEFAULT 'chinese',
-      character_desc TEXT,
-      life_summary TEXT,
-      created_at INTEGER DEFAULT (strftime('%s', 'now')),
-      updated_at INTEGER DEFAULT (strftime('%s', 'now')),
-      FOREIGN KEY (user_id) REFERENCES users(id)
-    )
-  `);
-
-  // Comic conversations table
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS comic_conversations (
-      id TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL,
-      role TEXT NOT NULL,
-      content TEXT NOT NULL,
-      created_at INTEGER DEFAULT (strftime('%s', 'now')),
-      FOREIGN KEY (project_id) REFERENCES comic_projects(id) ON DELETE CASCADE
-    )
-  `);
-
-  // Comic panels table
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS comic_panels (
-      id TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL,
-      panel_order INTEGER NOT NULL,
-      title TEXT NOT NULL,
-      scene_desc TEXT NOT NULL,
-      prompt TEXT,
-      image_base64 TEXT,
-      status TEXT DEFAULT 'pending',
-      created_at INTEGER DEFAULT (strftime('%s', 'now')),
-      FOREIGN KEY (project_id) REFERENCES comic_projects(id) ON DELETE CASCADE
-    )
-  `);
-
-  // Create indexes
-  database.exec(`
-    CREATE INDEX IF NOT EXISTS idx_comic_projects_user_id ON comic_projects(user_id);
-    CREATE INDEX IF NOT EXISTS idx_comic_conversations_project_id ON comic_conversations(project_id);
-    CREATE INDEX IF NOT EXISTS idx_comic_panels_project_id ON comic_panels(project_id);
-  `);
-}
-
-// Initialize comic tables on module load
-initComicTables();
-
 // ============================================
 // Comic Project Operations
 // ============================================
 
-export function createComicProject(
+export async function createComicProject(
   userId: string,
   title: string,
   style: string = 'chinese'
-): ComicProject | undefined {
-  const database = getDb();
+): Promise<ComicProject | undefined> {
+  await ensureInit();
   const id = crypto.randomUUID();
 
-  database.prepare(`
+  await getPool().query(
+    `
     INSERT INTO comic_projects (id, user_id, title, style)
-    VALUES (?, ?, ?, ?)
-  `).run(id, userId, title, style);
+    VALUES ($1, $2, $3, $4)
+    `,
+    [id, userId, title, style]
+  );
 
   return getComicProject(id);
 }
 
-export function getComicProject(id: string): ComicProject | undefined {
-  const database = getDb();
-  return database.prepare('SELECT * FROM comic_projects WHERE id = ?').get(id) as ComicProject | undefined;
+export async function getComicProject(id: string): Promise<ComicProject | undefined> {
+  await ensureInit();
+  const result = await getPool().query('SELECT * FROM comic_projects WHERE id = $1', [id]);
+  return result.rows[0] as ComicProject | undefined;
 }
 
-export function getComicProjectsByUserId(userId: string): ComicProject[] {
-  const database = getDb();
-  return database.prepare('SELECT * FROM comic_projects WHERE user_id = ? ORDER BY created_at DESC').all(userId) as ComicProject[];
+export async function getComicProjectsByUserId(userId: string): Promise<ComicProject[]> {
+  await ensureInit();
+  const result = await getPool().query(
+    'SELECT * FROM comic_projects WHERE user_id = $1 ORDER BY created_at DESC',
+    [userId]
+  );
+  return result.rows as ComicProject[];
 }
 
-export function updateComicProject(
+export async function updateComicProject(
   id: string,
-  updates: Partial<Pick<ComicProject, 'title' | 'status' | 'style' | 'character_desc' | 'life_summary'>>
-): void {
-  const database = getDb();
+  updates: Partial<Pick<ComicProject, 'title' | 'status' | 'style' | 'character_desc' | 'life_summary' | 'chat_session_id'>>
+): Promise<void> {
+  await ensureInit();
   const fields: string[] = [];
   const values: unknown[] = [];
+  let paramIndex = 1;
 
   if (updates.title !== undefined) {
-    fields.push('title = ?');
+    fields.push(`title = $${paramIndex++}`);
     values.push(updates.title);
   }
   if (updates.status !== undefined) {
-    fields.push('status = ?');
+    fields.push(`status = $${paramIndex++}`);
     values.push(updates.status);
   }
   if (updates.style !== undefined) {
-    fields.push('style = ?');
+    fields.push(`style = $${paramIndex++}`);
     values.push(updates.style);
   }
   if (updates.character_desc !== undefined) {
-    fields.push('character_desc = ?');
+    fields.push(`character_desc = $${paramIndex++}`);
     values.push(updates.character_desc);
   }
   if (updates.life_summary !== undefined) {
-    fields.push('life_summary = ?');
+    fields.push(`life_summary = $${paramIndex++}`);
     values.push(updates.life_summary);
+  }
+  if (updates.chat_session_id !== undefined) {
+    fields.push(`chat_session_id = $${paramIndex++}`);
+    values.push(updates.chat_session_id);
   }
 
   if (fields.length > 0) {
-    fields.push('updated_at = strftime(\'%s\', \'now\')');
+    fields.push(`updated_at = EXTRACT(EPOCH FROM NOW())::BIGINT`);
     values.push(id);
-    database.prepare(`UPDATE comic_projects SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    await getPool().query(
+      `UPDATE comic_projects SET ${fields.join(', ')} WHERE id = $${paramIndex}`,
+      values
+    );
   }
 }
 
-export function deleteComicProject(id: string): void {
-  const database = getDb();
-  database.prepare('DELETE FROM comic_projects WHERE id = ?').run(id);
+export async function deleteComicProject(id: string): Promise<void> {
+  await ensureInit();
+  await getPool().query('DELETE FROM comic_projects WHERE id = $1', [id]);
 }
 
 // ============================================
 // Comic Conversation Operations
 // ============================================
 
-export function addConversation(
+export async function addConversation(
   projectId: string,
   role: 'user' | 'assistant',
   content: string
-): ComicConversation | undefined {
-  const database = getDb();
+): Promise<ComicConversation | undefined> {
+  await ensureInit();
   const id = crypto.randomUUID();
 
-  database.prepare(`
+  await getPool().query(
+    `
     INSERT INTO comic_conversations (id, project_id, role, content)
-    VALUES (?, ?, ?, ?)
-  `).run(id, projectId, role, content);
+    VALUES ($1, $2, $3, $4)
+    `,
+    [id, projectId, role, content]
+  );
 
-  return database.prepare('SELECT * FROM comic_conversations WHERE id = ?').get(id) as ComicConversation | undefined;
+  const result = await getPool().query('SELECT * FROM comic_conversations WHERE id = $1', [id]);
+  return result.rows[0] as ComicConversation | undefined;
 }
 
-export function getConversations(projectId: string): ComicConversation[] {
-  const database = getDb();
-  return database.prepare('SELECT * FROM comic_conversations WHERE project_id = ? ORDER BY created_at ASC').all(projectId) as ComicConversation[];
+export async function getConversations(projectId: string): Promise<ComicConversation[]> {
+  await ensureInit();
+  const result = await getPool().query(
+    'SELECT * FROM comic_conversations WHERE project_id = $1 ORDER BY created_at ASC',
+    [projectId]
+  );
+  return result.rows as ComicConversation[];
 }
 
-export function clearConversations(projectId: string): void {
-  const database = getDb();
-  database.prepare('DELETE FROM comic_conversations WHERE project_id = ?').run(projectId);
+export async function clearConversations(projectId: string): Promise<void> {
+  await ensureInit();
+  await getPool().query('DELETE FROM comic_conversations WHERE project_id = $1', [projectId]);
 }
 
 // ============================================
 // Comic Panel Operations
 // ============================================
 
-export function createPanels(
+export async function createPanels(
   projectId: string,
   panels: Array<{ title: string; scene_desc: string }>
-): ComicPanel[] {
-  const database = getDb();
-  const insertStmt = database.prepare(`
-    INSERT INTO comic_panels (id, project_id, panel_order, title, scene_desc)
-    VALUES (?, ?, ?, ?, ?)
-  `);
+): Promise<ComicPanel[]> {
+  await ensureInit();
 
   // Delete existing panels first
-  database.prepare('DELETE FROM comic_panels WHERE project_id = ?').run(projectId);
+  await getPool().query('DELETE FROM comic_panels WHERE project_id = $1', [projectId]);
 
   // Insert new panels
   for (let i = 0; i < panels.length; i++) {
     const id = crypto.randomUUID();
-    insertStmt.run(id, projectId, i + 1, panels[i].title, panels[i].scene_desc);
+    await getPool().query(
+      `
+      INSERT INTO comic_panels (id, project_id, panel_order, title, scene_desc)
+      VALUES ($1, $2, $3, $4, $5)
+      `,
+      [id, projectId, i + 1, panels[i].title, panels[i].scene_desc]
+    );
   }
 
   return getPanels(projectId);
 }
 
-export function getPanels(projectId: string): ComicPanel[] {
-  const database = getDb();
-  return database.prepare('SELECT * FROM comic_panels WHERE project_id = ? ORDER BY panel_order ASC').all(projectId) as ComicPanel[];
+export async function getPanels(projectId: string): Promise<ComicPanel[]> {
+  await ensureInit();
+  const result = await getPool().query(
+    'SELECT * FROM comic_panels WHERE project_id = $1 ORDER BY panel_order ASC',
+    [projectId]
+  );
+  return result.rows as ComicPanel[];
 }
 
-export function getPanel(id: string): ComicPanel | undefined {
-  const database = getDb();
-  return database.prepare('SELECT * FROM comic_panels WHERE id = ?').get(id) as ComicPanel | undefined;
+export async function getPanel(id: string): Promise<ComicPanel | undefined> {
+  await ensureInit();
+  const result = await getPool().query('SELECT * FROM comic_panels WHERE id = $1', [id]);
+  return result.rows[0] as ComicPanel | undefined;
 }
 
-export function updatePanel(
+export async function updatePanel(
   id: string,
   updates: Partial<Pick<ComicPanel, 'prompt' | 'image_base64' | 'status'>>
-): void {
-  const database = getDb();
+): Promise<void> {
+  await ensureInit();
   const fields: string[] = [];
   const values: unknown[] = [];
+  let paramIndex = 1;
 
   if (updates.prompt !== undefined) {
-    fields.push('prompt = ?');
+    fields.push(`prompt = $${paramIndex++}`);
     values.push(updates.prompt);
   }
   if (updates.image_base64 !== undefined) {
-    fields.push('image_base64 = ?');
+    fields.push(`image_base64 = $${paramIndex++}`);
     values.push(updates.image_base64);
   }
   if (updates.status !== undefined) {
-    fields.push('status = ?');
+    fields.push(`status = $${paramIndex++}`);
     values.push(updates.status);
   }
 
   if (fields.length > 0) {
     values.push(id);
-    database.prepare(`UPDATE comic_panels SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    await getPool().query(
+      `UPDATE comic_panels SET ${fields.join(', ')} WHERE id = $${paramIndex}`,
+      values
+    );
   }
 }

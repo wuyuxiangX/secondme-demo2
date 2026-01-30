@@ -5,7 +5,7 @@ import { createOAuthState } from '@/lib/db';
 export async function POST() {
   try {
     const state = uuidv4();
-    createOAuthState(state);
+    await createOAuthState(state);
 
     return NextResponse.json({
       authorizeUrl: 'https://go.second.me/oauth/',

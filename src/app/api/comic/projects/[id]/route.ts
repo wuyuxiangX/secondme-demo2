@@ -11,14 +11,14 @@ export async function GET(
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   }
 
-  const user = getUserById(userId);
+  const user = await getUserById(userId);
   if (!user) {
     return NextResponse.json({ error: 'User not found' }, { status: 401 });
   }
 
   try {
     const { id } = await params;
-    const project = getComicProject(id);
+    const project = await getComicProject(id);
 
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
@@ -45,14 +45,14 @@ export async function PATCH(
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   }
 
-  const user = getUserById(userId);
+  const user = await getUserById(userId);
   if (!user) {
     return NextResponse.json({ error: 'User not found' }, { status: 401 });
   }
 
   try {
     const { id } = await params;
-    const project = getComicProject(id);
+    const project = await getComicProject(id);
 
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
@@ -65,9 +65,9 @@ export async function PATCH(
     const body = await request.json();
     const { title, status, style, character_desc, life_summary } = body;
 
-    updateComicProject(id, { title, status, style, character_desc, life_summary });
+    await updateComicProject(id, { title, status, style, character_desc, life_summary });
 
-    const updatedProject = getComicProject(id);
+    const updatedProject = await getComicProject(id);
     return NextResponse.json({ project: updatedProject });
   } catch (error) {
     console.error('Failed to update project:', error);
@@ -85,14 +85,14 @@ export async function DELETE(
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   }
 
-  const user = getUserById(userId);
+  const user = await getUserById(userId);
   if (!user) {
     return NextResponse.json({ error: 'User not found' }, { status: 401 });
   }
 
   try {
     const { id } = await params;
-    const project = getComicProject(id);
+    const project = await getComicProject(id);
 
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
@@ -102,7 +102,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    deleteComicProject(id);
+    await deleteComicProject(id);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Failed to delete project:', error);

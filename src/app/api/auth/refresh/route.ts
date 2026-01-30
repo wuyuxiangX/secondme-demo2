@@ -5,7 +5,7 @@ export async function POST(request: NextRequest) {
   try {
     const { userId } = await request.json();
 
-    const user = getUserById(userId);
+    const user = await getUserById(userId);
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     const { accessToken, refreshToken, expiresIn } = tokenResult.data;
 
     // Update tokens in database
-    updateUserTokens(userId, accessToken, refreshToken, expiresIn);
+    await updateUserTokens(userId, accessToken, refreshToken, expiresIn);
 
     return NextResponse.json({
       success: true,

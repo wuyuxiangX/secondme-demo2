@@ -6,6 +6,7 @@ import {
   addConversation,
   getConversations,
   updateUserTokens,
+  ComicProject,
 } from '@/lib/db';
 
 const SYSTEM_PROMPT = `你是一位友善、富有同理心的人生故事采访者。你的任务是通过对话了解用户的人生经历，为创作一部6幅漫画的人生故事做准备。
@@ -34,7 +35,7 @@ async function getAuthenticatedUser(request: NextRequest) {
     return { error: 'Authentication required', status: 401 };
   }
 
-  const user = getUserById(userId);
+  const user = await getUserById(userId);
   if (!user) {
     return { error: 'User not found', status: 401 };
   }
@@ -58,7 +59,7 @@ async function getAuthenticatedUser(request: NextRequest) {
 
       if (refreshResponse.ok) {
         const tokenData = await refreshResponse.json();
-        updateUserTokens(userId, tokenData.accessToken, tokenData.refreshToken, tokenData.expiresIn);
+        await updateUserTokens(userId, tokenData.accessToken, tokenData.refreshToken, tokenData.expiresIn);
         user.access_token = tokenData.accessToken;
       }
     } catch (error) {
@@ -82,7 +83,7 @@ export async function POST(
   }
 
   const { id } = await params;
-  const project = getComicProject(id);
+  const project = await getComicProject(id);
 
   if (!project) {
     return new Response(JSON.stringify({ error: 'Project not found' }), {
@@ -110,35 +111,27 @@ export async function POST(
     }
 
     // Save user message
-    addConversation(id, 'user', message);
+    await addConversation(id, 'user', message);
 
     // Update project status to chatting
     if (project.status === 'draft') {
-      updateComicProject(id, { status: 'chatting' });
+      await updateComicProject(id, { status: 'chatting' });
     }
 
-    // Get conversation history
-    const conversations = getConversations(id);
-
-    // Build messages for SecondMe API
-    const messages = [
-      { role: 'system', content: SYSTEM_PROMPT },
-      ...conversations.map((c) => ({
-        role: c.role,
-        content: c.content,
-      })),
-    ];
+    // Check if this is a new session (no sessionId stored)
+    const isNewSession = !project.chat_session_id;
 
     // Call SecondMe chat API with streaming
-    const response = await fetch(`${process.env.SECONDME_API_BASE}/secondme/chat`, {
+    const response = await fetch(`${process.env.SECONDME_API_BASE}/secondme/chat/stream`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${auth.user.access_token}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        messages,
-        stream: true,
+        message,
+        ...(project.chat_session_id && { sessionId: project.chat_session_id }),
+        ...(isNewSession && { systemPrompt: SYSTEM_PROMPT }),
       }),
     });
 
@@ -154,6 +147,8 @@ export async function POST(
     // Stream the response
     const encoder = new TextEncoder();
     let fullResponse = '';
+    const projectId = id;
+    let currentProject: ComicProject | undefined = project;
 
     const stream = new ReadableStream({
       async start(controller) {
@@ -164,16 +159,50 @@ export async function POST(
         }
 
         const decoder = new TextDecoder();
+        let buffer = '';
 
         try {
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
 
-            const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split('\n');
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            // Keep the last incomplete line in buffer
+            buffer = lines.pop() || '';
 
-            for (const line of lines) {
+            for (let i = 0; i < lines.length; i++) {
+              const line = lines[i].trim();
+
+              // Handle session event to extract sessionId
+              if (line === 'event: session') {
+                // Next line should be data with sessionId
+                const nextLine = lines[++i]?.trim();
+                if (nextLine && nextLine.startsWith('data: ')) {
+                  try {
+                    const sessionData = JSON.parse(nextLine.slice(6));
+                    if (sessionData.sessionId && !currentProject?.chat_session_id) {
+                      await updateComicProject(projectId, { chat_session_id: sessionData.sessionId });
+                      currentProject = await getComicProject(projectId);
+                    }
+                  } catch {
+                    // Failed to parse session data
+                  }
+                }
+                continue;
+              }
+
+              // Handle content event
+              if (line === 'event: content') {
+                continue;
+              }
+
+              // Handle done event
+              if (line === 'event: done') {
+                continue;
+              }
+
+              // Handle data lines
               if (line.startsWith('data: ')) {
                 const data = line.slice(6);
                 if (data === '[DONE]') {
@@ -182,7 +211,8 @@ export async function POST(
 
                 try {
                   const parsed = JSON.parse(data);
-                  const content = parsed.choices?.[0]?.delta?.content || '';
+                  // Handle content from the stream
+                  const content = parsed.content || parsed.choices?.[0]?.delta?.content || '';
                   if (content) {
                     fullResponse += content;
                     controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
@@ -194,9 +224,29 @@ export async function POST(
             }
           }
 
+          // Process any remaining buffer
+          if (buffer.trim()) {
+            const line = buffer.trim();
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6);
+              if (data !== '[DONE]') {
+                try {
+                  const parsed = JSON.parse(data);
+                  const content = parsed.content || parsed.choices?.[0]?.delta?.content || '';
+                  if (content) {
+                    fullResponse += content;
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
+                  }
+                } catch {
+                  // Not valid JSON
+                }
+              }
+            }
+          }
+
           // Save assistant message
           if (fullResponse) {
-            addConversation(id, 'assistant', fullResponse);
+            await addConversation(projectId, 'assistant', fullResponse);
           }
 
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
@@ -237,7 +287,7 @@ export async function GET(
   }
 
   const { id } = await params;
-  const project = getComicProject(id);
+  const project = await getComicProject(id);
 
   if (!project) {
     return new Response(JSON.stringify({ error: 'Project not found' }), {
@@ -253,7 +303,7 @@ export async function GET(
     });
   }
 
-  const conversations = getConversations(id);
+  const conversations = await getConversations(id);
   return new Response(JSON.stringify({ conversations }), {
     headers: { 'Content-Type': 'application/json' },
   });

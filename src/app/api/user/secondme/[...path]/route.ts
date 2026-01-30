@@ -8,7 +8,7 @@ async function getAuthenticatedUser(request: NextRequest) {
     return { error: 'Authentication required', status: 401 };
   }
 
-  const user = getUserById(userId);
+  const user = await getUserById(userId);
   if (!user) {
     return { error: 'User not found', status: 401 };
   }
@@ -32,7 +32,7 @@ async function getAuthenticatedUser(request: NextRequest) {
 
       if (refreshResponse.ok) {
         const tokenData = await refreshResponse.json();
-        updateUserTokens(userId, tokenData.accessToken, tokenData.refreshToken, tokenData.expiresIn);
+        await updateUserTokens(userId, tokenData.accessToken, tokenData.refreshToken, tokenData.expiresIn);
         user.access_token = tokenData.accessToken;
       }
     } catch (error) {

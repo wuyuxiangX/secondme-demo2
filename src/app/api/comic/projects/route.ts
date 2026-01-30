@@ -8,13 +8,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   }
 
-  const user = getUserById(userId);
+  const user = await getUserById(userId);
   if (!user) {
     return NextResponse.json({ error: 'User not found' }, { status: 401 });
   }
 
   try {
-    const projects = getComicProjectsByUserId(userId);
+    const projects = await getComicProjectsByUserId(userId);
     return NextResponse.json({ projects });
   } catch (error) {
     console.error('Failed to get projects:', error);
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   }
 
-  const user = getUserById(userId);
+  const user = await getUserById(userId);
   if (!user) {
     return NextResponse.json({ error: 'User not found' }, { status: 401 });
   }
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 });
     }
 
-    const project = createComicProject(userId, title, style || 'chinese');
+    const project = await createComicProject(userId, title, style || 'chinese');
 
     if (!project) {
       return NextResponse.json({ error: 'Failed to create project' }, { status: 500 });

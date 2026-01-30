@@ -61,7 +61,7 @@ async function getAuthenticatedUser(request: NextRequest) {
     return { error: 'Authentication required', status: 401 };
   }
 
-  const user = getUserById(userId);
+  const user = await getUserById(userId);
   if (!user) {
     return { error: 'User not found', status: 401 };
   }
@@ -85,7 +85,7 @@ async function getAuthenticatedUser(request: NextRequest) {
 
       if (refreshResponse.ok) {
         const tokenData = await refreshResponse.json();
-        updateUserTokens(userId, tokenData.accessToken, tokenData.refreshToken, tokenData.expiresIn);
+        await updateUserTokens(userId, tokenData.accessToken, tokenData.refreshToken, tokenData.expiresIn);
         user.access_token = tokenData.accessToken;
       }
     } catch (error) {
@@ -106,7 +106,7 @@ export async function POST(
   }
 
   const { id } = await params;
-  const project = getComicProject(id);
+  const project = await getComicProject(id);
 
   if (!project) {
     return NextResponse.json({ error: 'Project not found' }, { status: 404 });
@@ -118,7 +118,7 @@ export async function POST(
 
   try {
     // Get conversations
-    const conversations = getConversations(id);
+    const conversations = await getConversations(id);
 
     if (conversations.length < 2) {
       return NextResponse.json(
@@ -135,7 +135,7 @@ export async function POST(
     const prompt = ANALYSIS_PROMPT.replace('{conversations}', conversationText);
 
     // Update status to analyzing
-    updateComicProject(id, { status: 'analyzing' });
+    await updateComicProject(id, { status: 'analyzing' });
 
     // Call SecondMe API for analysis
     const response = await fetch(`${process.env.SECONDME_API_BASE}/secondme/chat`, {
@@ -153,7 +153,7 @@ export async function POST(
     if (!response.ok) {
       const errorText = await response.text();
       console.error('SecondMe API error:', errorText);
-      updateComicProject(id, { status: 'chatting' });
+      await updateComicProject(id, { status: 'chatting' });
       return NextResponse.json(
         { error: 'Failed to analyze conversation' },
         { status: 500 }
@@ -196,13 +196,13 @@ export async function POST(
     }
 
     // Update project with character description and life summary
-    updateComicProject(id, {
+    await updateComicProject(id, {
       character_desc: analysis.character_desc,
       life_summary: analysis.life_summary,
     });
 
     // Create panels in database
-    const panels = createPanels(
+    const panels = await createPanels(
       id,
       analysis.panels.map((p: { title: string; scene_desc: string }) => ({
         title: p.title,
@@ -217,7 +217,7 @@ export async function POST(
     });
   } catch (error) {
     console.error('Analysis error:', error);
-    updateComicProject(id, { status: 'chatting' });
+    await updateComicProject(id, { status: 'chatting' });
     return NextResponse.json({ error: 'Failed to analyze' }, { status: 500 });
   }
 }

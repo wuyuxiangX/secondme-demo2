@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   }
 
-  const user = getUserById(userId);
+  const user = await getUserById(userId);
   if (!user) {
     return NextResponse.json({ error: 'User not found' }, { status: 401 });
   }
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 
       if (refreshResponse.ok) {
         const tokenData = await refreshResponse.json();
-        updateUserTokens(userId, tokenData.accessToken, tokenData.refreshToken, tokenData.expiresIn);
+        await updateUserTokens(userId, tokenData.accessToken, tokenData.refreshToken, tokenData.expiresIn);
       }
     } catch (error) {
       console.error('Auto refresh failed:', error);

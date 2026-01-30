@@ -21,7 +21,7 @@ export async function POST(
     });
   }
 
-  const user = getUserById(userId);
+  const user = await getUserById(userId);
   if (!user) {
     return new Response(JSON.stringify({ error: 'User not found' }), {
       status: 401,
@@ -30,7 +30,7 @@ export async function POST(
   }
 
   const { id } = await params;
-  const project = getComicProject(id);
+  const project = await getComicProject(id);
 
   if (!project) {
     return new Response(JSON.stringify({ error: 'Project not found' }), {
@@ -46,7 +46,7 @@ export async function POST(
     });
   }
 
-  const panels = getPanels(id);
+  const panels = await getPanels(id);
 
   if (panels.length === 0) {
     return new Response(JSON.stringify({ error: 'No panels to generate' }), {
@@ -56,9 +56,10 @@ export async function POST(
   }
 
   // Update project status to generating
-  updateComicProject(id, { status: 'generating' });
+  await updateComicProject(id, { status: 'generating' });
 
   const encoder = new TextEncoder();
+  const projectId = id;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -84,7 +85,7 @@ export async function POST(
           });
 
           // Update panel status to generating
-          updatePanel(panel.id, { status: 'generating' });
+          await updatePanel(panel.id, { status: 'generating' });
 
           // Build the image prompt
           const prompt = buildPanelPrompt(
@@ -95,14 +96,14 @@ export async function POST(
           );
 
           // Update panel with the prompt
-          updatePanel(panel.id, { prompt });
+          await updatePanel(panel.id, { prompt });
 
           // Generate the image
           const result = await generateImage(prompt, style);
 
           if (result.success && result.imageBase64) {
             // Update panel with the image
-            updatePanel(panel.id, {
+            await updatePanel(panel.id, {
               image_base64: result.imageBase64,
               status: 'completed',
             });
@@ -117,7 +118,7 @@ export async function POST(
             });
           } else {
             // Update panel with failed status
-            updatePanel(panel.id, { status: 'failed' });
+            await updatePanel(panel.id, { status: 'failed' });
 
             sendEvent({
               type: 'error',
@@ -131,7 +132,7 @@ export async function POST(
         }
 
         // Update project status to completed
-        updateComicProject(id, { status: 'completed' });
+        await updateComicProject(projectId, { status: 'completed' });
 
         sendEvent({
           type: 'done',
@@ -148,7 +149,7 @@ export async function POST(
         });
 
         // Update project status back to analyzing on error
-        updateComicProject(id, { status: 'analyzing' });
+        await updateComicProject(projectId, { status: 'analyzing' });
 
         controller.close();
       }

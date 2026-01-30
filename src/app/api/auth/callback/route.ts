@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create or update user in database
-    const user = createOrUpdateUser(
+    const user = await createOrUpdateUser(
       userIdentifier,
       accessToken,
       refreshToken,
