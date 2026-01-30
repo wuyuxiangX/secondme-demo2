@@ -3,6 +3,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import LoginButton from "@/components/LoginButton";
 import UserProfile from "@/components/UserProfile";
+import Link from "next/link";
 
 export default function Home() {
   const { user, loading } = useAuth();
@@ -65,7 +66,18 @@ export default function Home() {
           </p>
         </div>
 
-        {user ? <UserProfile /> : <LoginButton />}
+        {user ? (
+          <>
+            <UserProfile />
+            <div className="mt-8">
+              <Link href="/comic" className="btn btn-primary" style={{ width: "100%", display: "flex" }}>
+                开始创作漫画
+              </Link>
+            </div>
+          </>
+        ) : (
+          <LoginButton />
+        )}
 
         {/* Bottom decoration */}
         <span className="panel-decoration bottom-right">你的故事即将开始...</span>
