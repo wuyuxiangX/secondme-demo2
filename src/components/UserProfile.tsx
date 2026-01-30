@@ -8,7 +8,7 @@ export default function UserProfile() {
   if (!user) return null;
 
   const userInfo = user.userInfo;
-  const displayName = userInfo.name || userInfo.nickname || "用户";
+  const displayName = String(userInfo.name || userInfo.nickname || "用户");
   const initial = displayName.charAt(0).toUpperCase();
 
   return (
