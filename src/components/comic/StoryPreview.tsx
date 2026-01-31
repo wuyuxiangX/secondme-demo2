@@ -29,7 +29,7 @@ export default function StoryPreview({
         </p>
       </div>
 
-      <h3 className="story-panels-title">6幅漫画场景</h3>
+      <h3 className="story-panels-title">漫画场景</h3>
       <div className="story-panels-grid">
         {panels.map((panel) => (
           <div key={panel.id} className="story-panel-card">

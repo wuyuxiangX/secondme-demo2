@@ -1,6 +1,6 @@
 "use client";
 
-import { COMIC_STYLES } from "@/lib/openrouter";
+import { COMIC_STYLES } from "@/lib/comic-styles";
 
 interface StyleSelectorProps {
   selectedStyle: string;

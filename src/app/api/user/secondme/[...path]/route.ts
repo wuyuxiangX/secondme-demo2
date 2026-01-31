@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserById, updateUserTokens } from '@/lib/db';
+import { proxyFetch } from '@/lib/proxy-fetch';
 
 async function getAuthenticatedUser(request: NextRequest) {
   const userId = request.headers.get('x-user-id');
@@ -17,7 +18,7 @@ async function getAuthenticatedUser(request: NextRequest) {
   const now = Math.floor(Date.now() / 1000);
   if (user.token_expires_at < now + 300) {
     try {
-      const refreshResponse = await fetch(process.env.OAUTH_REFRESH_URL!, {
+      const refreshResponse = await proxyFetch(process.env.OAUTH_REFRESH_URL!, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -27,7 +28,7 @@ async function getAuthenticatedUser(request: NextRequest) {
           refresh_token: user.refresh_token,
           client_id: process.env.CLIENT_ID,
           client_secret: process.env.CLIENT_SECRET
-        })
+        }),
       });
 
       if (refreshResponse.ok) {
@@ -55,10 +56,10 @@ export async function GET(
   try {
     const { path } = await params;
     const apiPath = path.join('/');
-    const response = await fetch(`${process.env.SECONDME_API_BASE}/secondme/${apiPath}`, {
+    const response = await proxyFetch(`${process.env.SECONDME_API_BASE}/secondme/${apiPath}`, {
       headers: {
         'Authorization': `Bearer ${auth.user.access_token}`
-      }
+      },
     });
 
     const data = await response.json();
@@ -82,13 +83,13 @@ export async function POST(
     const { path } = await params;
     const apiPath = path.join('/');
     const body = await request.json();
-    const response = await fetch(`${process.env.SECONDME_API_BASE}/secondme/${apiPath}`, {
+    const response = await proxyFetch(`${process.env.SECONDME_API_BASE}/secondme/${apiPath}`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${auth.user.access_token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
     });
 
     const data = await response.json();

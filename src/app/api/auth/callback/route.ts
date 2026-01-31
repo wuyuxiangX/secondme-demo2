@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateAndDeleteOAuthState, createOrUpdateUser } from '@/lib/db';
+import { proxyFetch } from '@/lib/proxy-fetch';
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,12 +23,12 @@ export async function POST(request: NextRequest) {
       client_secret: process.env.CLIENT_SECRET!
     });
 
-    const tokenResponse = await fetch(process.env.OAUTH_TOKEN_URL!, {
+    const tokenResponse = await proxyFetch(process.env.OAUTH_TOKEN_URL!, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'
       },
-      body: tokenParams.toString()
+      body: tokenParams.toString(),
     });
 
     const tokenResponseText = await tokenResponse.text();
@@ -53,10 +54,10 @@ export async function POST(request: NextRequest) {
     const userInfoUrl = `${process.env.SECONDME_API_BASE}/secondme/user/info`;
     console.log('User info URL:', userInfoUrl);
 
-    const userInfoResponse = await fetch(userInfoUrl, {
+    const userInfoResponse = await proxyFetch(userInfoUrl, {
       headers: {
         'Authorization': `Bearer ${accessToken}`
-      }
+      },
     });
 
     const userInfoText = await userInfoResponse.text();

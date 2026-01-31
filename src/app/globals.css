@@ -946,6 +946,53 @@ h1, h2, h3 {
   min-width: 200px;
 }
 
+/* Auto chat mode styles */
+.auto-progress {
+  padding: 16px 20px;
+  background: linear-gradient(135deg, var(--comic-cyan), var(--comic-blue));
+  border-bottom: var(--border-medium) solid var(--ink);
+}
+
+.auto-progress-text {
+  font-family: 'Comic Neue', cursive;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--ink);
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.auto-progress-bar {
+  height: 8px;
+  background: var(--paper);
+  border: var(--border-thin) solid var(--ink);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.auto-progress-fill {
+  height: 100%;
+  background: var(--comic-green);
+  transition: width 0.3s ease;
+}
+
+.auto-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  gap: 16px;
+  color: var(--ink);
+  font-family: 'Comic Neue', cursive;
+  font-weight: 700;
+}
+
+.auto-loading .spinner {
+  width: 40px;
+  height: 40px;
+}
+
 /* ===== STORY PREVIEW ===== */
 .story-preview {
   margin-bottom: 24px;

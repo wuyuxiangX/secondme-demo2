@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter, useParams } from "next/navigation";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import ChatInterface from "@/components/comic/ChatInterface";
 
@@ -30,60 +30,73 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchProject = useCallback(async () => {
-    if (!user) return;
-
-    try {
-      const [projectRes, chatRes] = await Promise.all([
-        fetch(`/api/comic/projects/${projectId}`, {
-          headers: { "x-user-id": user.id },
-        }),
-        fetch(`/api/comic/projects/${projectId}/chat`, {
-          headers: { "x-user-id": user.id },
-        }),
-      ]);
-
-      if (!projectRes.ok) {
-        throw new Error("Project not found");
-      }
-
-      const projectData = await projectRes.json();
-      setProject(projectData.project);
-
-      // Redirect if project is already analyzed or completed
-      if (["analyzing", "generating", "completed"].includes(projectData.project.status)) {
-        if (projectData.project.status === "completed") {
-          router.push(`/comic/${projectId}/gallery`);
-        } else {
-          router.push(`/comic/${projectId}/preview`);
-        }
-        return;
-      }
-
-      if (chatRes.ok) {
-        const chatData = await chatRes.json();
-        setMessages(
-          (chatData.conversations || []).map((c: { id: string; role: string; content: string }) => ({
-            id: c.id,
-            role: c.role,
-            content: c.content,
-          }))
-        );
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "加载失败");
-    } finally {
-      setLoading(false);
-    }
-  }, [user, projectId, router]);
-
   useEffect(() => {
+    const abortController = new AbortController();
+
+    const fetchData = async () => {
+      if (!user) return;
+
+      try {
+        const [projectRes, chatRes] = await Promise.all([
+          fetch(`/api/comic/projects/${projectId}`, {
+            headers: { "x-user-id": user.id },
+            signal: abortController.signal,
+          }),
+          fetch(`/api/comic/projects/${projectId}/chat`, {
+            headers: { "x-user-id": user.id },
+            signal: abortController.signal,
+          }),
+        ]);
+
+        if (!projectRes.ok) {
+          throw new Error("Project not found");
+        }
+
+        const projectData = await projectRes.json();
+        setProject(projectData.project);
+
+        // Redirect if project is already analyzed or completed
+        if (["analyzing", "generating", "completed"].includes(projectData.project.status)) {
+          if (projectData.project.status === "completed") {
+            router.push(`/comic/${projectId}/gallery`);
+          } else {
+            router.push(`/comic/${projectId}/preview`);
+          }
+          return;
+        }
+
+        if (chatRes.ok) {
+          const chatData = await chatRes.json();
+          setMessages(
+            (chatData.conversations || []).map((c: { id: string; role: string; content: string }) => ({
+              id: c.id,
+              role: c.role,
+              content: c.content,
+            }))
+          );
+        }
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
+          return; // 请求被取消，忽略
+        }
+        setError(err instanceof Error ? err.message : "加载失败");
+      } finally {
+        if (!abortController.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    };
+
     if (!authLoading && user) {
-      fetchProject();
+      fetchData();
     } else if (!authLoading && !user) {
       router.push("/");
     }
-  }, [authLoading, user, router, fetchProject]);
+
+    return () => {
+      abortController.abort();
+    };
+  }, [authLoading, user, projectId, router]);
 
   const handleComplete = async () => {
     if (!user) return;
@@ -149,7 +162,7 @@ export default function ChatPage() {
 
       <div className="chat-page-content">
         <div className="chat-instruction">
-          <p>与 AI 分身对话，分享你的人生故事。当收集到足够的信息后，点击"完成对话"开始创作漫画。</p>
+          <p>AI 采访者将与你的 AI 分身进行对话，收集你的人生故事信息。完成后将自动开始创作漫画。</p>
         </div>
 
         <ChatInterface
@@ -157,6 +170,7 @@ export default function ChatPage() {
           userId={user.id}
           initialMessages={messages}
           onComplete={handleComplete}
+          autoMode={true}
         />
       </div>
     </div>

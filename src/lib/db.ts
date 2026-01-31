@@ -232,7 +232,7 @@ export async function cleanupExpiredStates(): Promise<void> {
 // Comic Project Tables and Types
 // ============================================
 
-export type ComicStatus = 'draft' | 'chatting' | 'analyzing' | 'generating' | 'completed';
+export type ComicStatus = 'draft' | 'chatting' | 'analyzing' | 'preview' | 'generating' | 'completed';
 export type PanelStatus = 'pending' | 'generating' | 'completed' | 'failed';
 
 export interface ComicProject {

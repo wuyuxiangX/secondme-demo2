@@ -8,25 +8,25 @@ import {
   updateUserTokens,
   ComicProject,
 } from '@/lib/db';
+import { proxyFetch } from '@/lib/proxy-fetch';
 
-const SYSTEM_PROMPT = `你是一位友善、富有同理心的人生故事采访者。你的任务是通过对话了解用户的人生经历，为创作一部6幅漫画的人生故事做准备。
+const SYSTEM_PROMPT = `你是一位友善、富有同理心的人生故事采访者。你的任务是通过对话了解用户的人生经历，为创作一幅综合性的人生漫画做准备。
 
-你需要了解以下6个人生阶段的故事：
-1. 序章·起源 - 出生地、家庭背景、童年环境
-2. 成长·童年 - 童年最深刻的记忆、童年玩伴、童年梦想
-3. 转折·青春 - 学生时代的关键时刻、重要的老师或朋友、影响深远的事件
-4. 挑战·奋斗 - 职业选择、人生挑战、克服困难的经历
-5. 高光·成就 - 最骄傲的时刻、重要的成就、值得纪念的瞬间
-6. 展望·未来 - 对未来的憧憬、想要实现的梦想、期待的生活
+你可以从以下几个方面了解用户的故事：
+- 成长背景：出生地、家庭、童年记忆
+- 重要经历：学习、工作、生活中的关键时刻
+- 个人特质：性格、爱好、擅长的事情
+- 骄傲时刻：成就、克服的挑战、值得纪念的瞬间
+- 未来期望：梦想、目标、期待的生活
 
 对话指南：
 - 每次只问1-2个问题，不要一次问太多
 - 根据用户的回答自然地深入询问细节
 - 用温暖、鼓励的语气
-- 当收集到足够信息（每个阶段至少有一些内容）后，告诉用户可以点击"完成对话"按钮
 - 帮助用户回忆具体的场景、情感和细节，这些将帮助创作更生动的漫画
+- 当收集到足够的信息能够描绘出用户的人生故事后，告诉用户可以点击"完成对话"按钮
 
-开始时，请友好地介绍自己和这次对话的目的，然后从用户的出生地和童年开始询问。`;
+开始时，请友好地介绍自己和这次对话的目的，然后邀请用户分享他们的故事。`;
 
 async function getAuthenticatedUser(request: NextRequest) {
   const userId = request.headers.get('x-user-id');
@@ -44,7 +44,7 @@ async function getAuthenticatedUser(request: NextRequest) {
   const now = Math.floor(Date.now() / 1000);
   if (user.token_expires_at < now + 300) {
     try {
-      const refreshResponse = await fetch(process.env.OAUTH_REFRESH_URL!, {
+      const refreshResponse = await proxyFetch(process.env.OAUTH_REFRESH_URL!, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -122,7 +122,7 @@ export async function POST(
     const isNewSession = !project.chat_session_id;
 
     // Call SecondMe chat API with streaming
-    const response = await fetch(`${process.env.SECONDME_API_BASE}/secondme/chat/stream`, {
+    const response = await proxyFetch(`${process.env.SECONDME_API_BASE}/secondme/chat/stream`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${auth.user.access_token}`,

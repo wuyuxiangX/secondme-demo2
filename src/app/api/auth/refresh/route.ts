@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserById, updateUserTokens } from '@/lib/db';
+import { proxyFetch } from '@/lib/proxy-fetch';
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,12 +19,12 @@ export async function POST(request: NextRequest) {
       client_secret: process.env.CLIENT_SECRET!
     });
 
-    const refreshResponse = await fetch(process.env.OAUTH_REFRESH_URL!, {
+    const refreshResponse = await proxyFetch(process.env.OAUTH_REFRESH_URL!, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'
       },
-      body: refreshParams.toString()
+      body: refreshParams.toString(),
     });
 
     if (!refreshResponse.ok) {

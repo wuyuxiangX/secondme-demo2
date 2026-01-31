@@ -143,7 +143,7 @@ export default function PreviewPage() {
           <div className="loading" style={{ minHeight: "100px" }}>
             <div className="spinner"></div>
           </div>
-          <p style={{ marginTop: "16px" }}>正在分析你的人生故事，生成6个漫画场景...</p>
+          <p style={{ marginTop: "16px" }}>正在分析你的人生故事，生成漫画场景...</p>
         </div>
       </div>
     );
